@@ -93,7 +93,9 @@ label{display:block;color:var(--muted);font-size:12px;margin:8px 0 3px}
         <div><label>Andro avela aorian'ny fe-potoana</label><input id="s_grace" type="number" min="0"></div>
       </div>
       <label>Fomba fandoavana (asehon'ny bot)</label><textarea id="s_pay" rows="2"></textarea>
-      <div class="row"><div><label>1 $ = ? Ariary</label><input id="s_mga" type="number" step="1" min="1"></div></div>
+      <div class="row"><div><label>1 $ = ? Ariary</label><input id="s_mga" type="number" step="1" min="1"></div>
+        <div><label>Saram-pidirana chatter (Ar, atao crédit)</label><input id="s_act" type="number" step="100" min="0"></div>
+        <div><label>Version d'essai (minitra)</label><input id="s_trial" type="number" step="5" min="0"></div></div>
     </div>
     <div class="card"><h3 style="margin-top:0">📱 Findaina SMS (fandoavana ho azy)</h3>
       <label>Mpandefa SMS ekena (opérateur, misaraka amin'ny « , »)</label><input id="s_senders">
@@ -188,7 +190,11 @@ function renderClients() {
   $("cbody").innerHTML = CL.map(c => {
     const n = DV.filter(d => d.client_id === c.id).length;
     const late = c.kind === "agency" && (!c.paid_until || c.paid_until < new Date().toISOString().slice(0, 10));
-    const st = c.blocked ? '<span class="tag bad">⛔ Voasakana</span>' : late ? '<span class="tag wait">⏳ Abonnement</span>' : '<span class="tag ok">✅ Mandeha</span>';
+    const trial = c.active === false && c.trial_until && new Date(c.trial_until) > new Date();
+    const st = c.blocked ? '<span class="tag bad">⛔ Voasakana</span>'
+      : trial ? `<span class="tag wait">🕐 Essai (${Math.ceil((new Date(c.trial_until) - new Date()) / 60000)} min)</span>`
+      : c.active === false ? '<span class="tag bad">🛒 Miandry fandoavana</span>'
+      : late ? '<span class="tag wait">⏳ Abonnement</span>' : '<span class="tag ok">✅ Mandeha</span>';
     return `<tr><td><b>${esc(c.name)}</b>${c.note ? `<br><span class="muted">${esc(c.note)}</span>` : ""}
       <br><input placeholder="📱 laharana (034..., 032...)" value="${esc(c.phones || "")}" style="margin-top:4px;font-size:12px" onchange="upd('${c.id}',{phones:this.value.trim()||null})">
       ${Number(c.credit_usd) > 0 ? `<br><span class="tag ok">crédit ${money(c.credit_usd)}</span>` : ""}</td>
@@ -271,6 +277,7 @@ function renderSettings() {
   $("s_pct").value = S.commission_pct; $("s_min").value = S.min_weekly_usd; $("s_rate").value = S.usd_per_star;
   $("s_grace").value = S.grace_days; $("s_pay").value = S.payment_info;
   $("s_mga").value = S.usd_to_mga; $("s_senders").value = S.sms_senders || "";
+  $("s_act").value = S.chatter_activation_mga ?? 5000; $("s_trial").value = S.trial_minutes ?? 60;
   $("s_url").value = SB_URL + "/rest/v1/rpc/sms_payment";
   $("s_headers").value = "apikey: " + SB_ANON + "\nContent-Type: application/json";
   $("s_body").value = JSON.stringify({ p_secret: S.sms_secret, p_from: "%from%", p_text: "%text%" });
@@ -286,7 +293,9 @@ async function saveSettings() {
   });
   const patch = { commission_pct: +$("s_pct").value || 0, min_weekly_usd: +$("s_min").value || 0, usd_per_star: +$("s_rate").value || 0.013,
     grace_days: Math.max(0, +$("s_grace").value || 0), payment_info: $("s_pay").value.trim(), agency_plans: plans,
-    usd_to_mga: Math.max(1, +$("s_mga").value || 4500), sms_senders: $("s_senders").value.trim(), updated_at: new Date().toISOString() };
+    usd_to_mga: Math.max(1, +$("s_mga").value || 4500), sms_senders: $("s_senders").value.trim(),
+    chatter_activation_mga: Math.max(0, +$("s_act").value || 0), trial_minutes: Math.max(0, Math.round(+$("s_trial").value || 0)),
+    updated_at: new Date().toISOString() };
   const { error } = await sb.from("settings").update(patch).eq("id", 1);
   if (error) return msg("⚠️ " + error.message, true); msg("✅ Voatahiry: ampiharina amin'ny bot rehetra"); loadAll();
 }

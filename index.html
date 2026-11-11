@@ -106,7 +106,7 @@ label{display:block;color:var(--muted);font-size:12px;margin:8px 0 3px}
       <p class="muted" style="font-size:12px">⚠️ Aza omena olona ny « p_secret »: izy no manamarina fa avy amin'ny findainao ny SMS.</p>
     </div>
     <div class="card"><h3 style="margin-top:0">Tolotra agence (abonnement isam-bolana)</h3>
-      <div class="wrap"><table><thead><tr><th>Anarana</th><th>PC (sièges)</th><th>$ isam-bolana</th><th></th></tr></thead><tbody id="pbody"></tbody></table></div>
+      <div class="wrap"><table><thead><tr><th>Anarana</th><th>PC (sièges)</th><th>Ariary isam-bolana</th><th></th></tr></thead><tbody id="pbody"></tbody></table></div>
       <button class="btn sm" id="b_plan" style="margin-top:8px">+ Tolotra</button>
     </div>
     <button class="btn pink" id="b_save">💾 Tehirizina</button>
@@ -186,7 +186,7 @@ async function pay(id, v) {
 
 function renderClients() {
   const plans = S.agency_plans || [];
-  $("n_plan").innerHTML = `<option value="">—</option>` + plans.map(p => `<option value="${esc(p.name)}">${esc(p.name)} · ${p.seats} PC · ${money(p.usd_month)}/volana</option>`).join("");
+  $("n_plan").innerHTML = `<option value="">—</option>` + plans.map(p => `<option value="${esc(p.name)}">${esc(p.name)} · ${p.seats} PC · ${ar((+p.usd_month || 0) * (+S.usd_to_mga || 4500))}/volana</option>`).join("");
   $("cbody").innerHTML = CL.map(c => {
     const n = DV.filter(d => d.client_id === c.id).length;
     const late = c.kind === "agency" && (!c.paid_until || c.paid_until < new Date().toISOString().slice(0, 10));
@@ -202,7 +202,7 @@ function renderClients() {
       <td><span class="key" title="Tsindrio hadika" onclick="navigator.clipboard.writeText('${esc(c.licence_key)}');msg('📋 Voadika: ${esc(c.licence_key)}')">${esc(c.licence_key)}</span></td>
       <td>${n} / <input type="number" min="1" value="${c.seats}" style="width:60px" onchange="upd('${c.id}',{seats:+this.value})"></td>
       <td>${c.kind === "agency"
-        ? `<input type="number" step="0.01" placeholder="tolotra" value="${c.usd_month ?? ""}" style="width:90px" onchange="upd('${c.id}',{usd_month:this.value===''?null:+this.value})"> $`
+        ? `<input type="number" step="100" placeholder="tolotra" value="${c.usd_month == null ? "" : Math.round(c.usd_month * (+S.usd_to_mga || 4500) / 100) * 100}" style="width:100px" onchange="upd('${c.id}',{usd_month:this.value===''?null:Math.round(+this.value/(+S.usd_to_mga||4500)*10000)/10000})"> Ar`
         : `<input type="number" step="0.1" placeholder="${S.commission_pct}" value="${c.commission_pct ?? ""}" style="width:70px" onchange="upd('${c.id}',{commission_pct:this.value===''?null:+this.value})"> %`}</td>
       <td>${c.kind === "agency" ? `<input type="date" value="${c.paid_until ?? ""}" onchange="upd('${c.id}',{paid_until:this.value||null})">
         <button class="btn sm green" onclick="plusMonth('${c.id}')">+1 volana</button>` : "—"}</td>
@@ -283,13 +283,15 @@ function renderSettings() {
   $("s_body").value = JSON.stringify({ p_secret: S.sms_secret, p_from: "%from%", p_text: "%text%" });
   $("pbody").innerHTML = (S.agency_plans || []).map((p, i) => `<tr><td><input value="${esc(p.name)}" data-i="${i}" data-k="name"></td>
     <td><input type="number" min="1" value="${p.seats}" data-i="${i}" data-k="seats"></td>
-    <td><input type="number" step="0.01" min="0" value="${p.usd_month}" data-i="${i}" data-k="usd_month"></td>
+    <td><input type="number" step="100" min="0" value="${Math.round((+p.usd_month || 0) * (+S.usd_to_mga || 4500) / 100) * 100}" data-i="${i}" data-k="mga"> Ar</td>
     <td><button class="btn sm rose" onclick="S.agency_plans.splice(${i},1);renderSettings()">🗑</button></td></tr>`).join("");
 }
 async function saveSettings() {
   const plans = (S.agency_plans || []).map((p, i) => {
     const g = k => document.querySelector(`#pbody [data-i="${i}"][data-k="${k}"]`).value;
-    return { name: g("name").trim() || ("Agence " + (i + 1)), seats: Math.max(1, +g("seats") || 1), usd_month: +g("usd_month") || 0 };
+    // vidiny soratana amin'ny Ariary -> tehirizina amin'ny $ (taha « 1 $ = ? Ariary » ao ambony)
+    return { name: g("name").trim() || ("Agence " + (i + 1)), seats: Math.max(1, +g("seats") || 1),
+             usd_month: Math.round((+g("mga") || 0) / Math.max(1, +$("s_mga").value || 4500) * 10000) / 10000 };
   });
   const patch = { commission_pct: +$("s_pct").value || 0, min_weekly_usd: +$("s_min").value || 0, usd_per_star: +$("s_rate").value || 0.013,
     grace_days: Math.max(0, +$("s_grace").value || 0), payment_info: $("s_pay").value.trim(), agency_plans: plans,
@@ -308,7 +310,7 @@ $("b_in").onclick = () => login(false); $("b_up").onclick = () => login(true);
 $("pw").addEventListener("keydown", e => { if (e.key === "Enter") login(false); });
 $("logout").onclick = async () => { await sb.auth.signOut(); location.reload(); };
 $("b_add").onclick = addClient; $("b_save").onclick = saveSettings; $("wsel").onchange = renderWeeks;
-$("b_plan").onclick = () => { (S.agency_plans = S.agency_plans || []).push({ name: "Agence", seats: 5, usd_month: 30 }); renderSettings(); };
+$("b_plan").onclick = () => { (S.agency_plans = S.agency_plans || []).push({ name: "Agence", seats: 5, usd_month: 100000 / (+S.usd_to_mga || 4500) }); renderSettings(); };
 enter();
 </script>
 </body>

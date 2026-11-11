@@ -105,6 +105,13 @@ label{display:block;color:var(--muted);font-size:12px;margin:8px 0 3px}
       <label>Body (JSON)</label><textarea id="s_body" rows="2" readonly onclick="this.select()"></textarea>
       <p class="muted" style="font-size:12px">⚠️ Aza omena olona ny « p_secret »: izy no manamarina fa avy amin'ny findainao ny SMS.</p>
     </div>
+    <div class="card"><h3 style="margin-top:0">✉️ SMS ho an'ny mpanjifa (application « SMS Gateway for Android »)</h3>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--fg)"><input id="g_on" type="checkbox" style="width:auto"> Alefaso SMS rehefa voaray ny fandoavana</label>
+      <div class="row"><div><label>Username (Cloud server)</label><input id="g_user" autocomplete="off"></div>
+        <div><label>Password (Cloud server)</label><input id="g_pass" type="password" autocomplete="new-password"></div></div>
+      <label>SMS licence vaovao ({ar} = vola, {key} = clé)</label><input id="g_tpl1">
+      <label>SMS fandoavana hafa ({ar}, {result})</label><input id="g_tpl2">
+    </div>
     <div class="card"><h3 style="margin-top:0">Tolotra agence (abonnement isam-bolana)</h3>
       <div class="wrap"><table><thead><tr><th>Anarana</th><th>PC (sièges)</th><th>Ariary isam-bolana</th><th></th></tr></thead><tbody id="pbody"></tbody></table></div>
       <button class="btn sm" id="b_plan" style="margin-top:8px">+ Tolotra</button>
@@ -278,6 +285,8 @@ function renderSettings() {
   $("s_grace").value = S.grace_days; $("s_pay").value = S.payment_info;
   $("s_mga").value = S.usd_to_mga; $("s_senders").value = S.sms_senders || "";
   $("s_act").value = S.chatter_activation_mga ?? 5000; $("s_trial").value = S.trial_minutes ?? 60;
+  $("g_on").checked = !!S.sms_gw_enabled; $("g_user").value = S.sms_gw_user || ""; $("g_pass").value = S.sms_gw_pass || "";
+  $("g_tpl1").value = S.sms_tpl_licence || ""; $("g_tpl2").value = S.sms_tpl_paid || "";
   $("s_url").value = SB_URL + "/rest/v1/rpc/sms_payment";
   $("s_headers").value = "apikey: " + SB_ANON + "\nContent-Type: application/json";
   $("s_body").value = JSON.stringify({ p_secret: S.sms_secret, p_from: "%from%", p_text: "%text%" });
@@ -297,6 +306,8 @@ async function saveSettings() {
     grace_days: Math.max(0, +$("s_grace").value || 0), payment_info: $("s_pay").value.trim(), agency_plans: plans,
     usd_to_mga: Math.max(1, +$("s_mga").value || 4500), sms_senders: $("s_senders").value.trim(),
     chatter_activation_mga: Math.max(0, +$("s_act").value || 0), trial_minutes: Math.max(0, Math.round(+$("s_trial").value || 0)),
+    sms_gw_enabled: $("g_on").checked, sms_gw_user: $("g_user").value.trim() || null, sms_gw_pass: $("g_pass").value || null,
+    sms_tpl_licence: $("g_tpl1").value.trim() || S.sms_tpl_licence, sms_tpl_paid: $("g_tpl2").value.trim() || S.sms_tpl_paid,
     updated_at: new Date().toISOString() };
   const { error } = await sb.from("settings").update(patch).eq("id", 1);
   if (error) return msg("⚠️ " + error.message, true); msg("✅ Voatahiry: ampiharina amin'ny bot rehetra"); loadAll();

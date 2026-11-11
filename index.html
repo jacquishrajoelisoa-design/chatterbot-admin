@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="mg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatterBot Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#0a0e1a;--panel:#0f1629;--card:#162038;--border:#24304d;--fg:#e6eaf3;--muted:#9aa6bd;--pink:#ec4899;--green:#34d399;--amber:#fbbf24;--rose:#fb7185;--cyan:#22d3ee}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5}
+header h1{font-size:17px;margin:0}header .sp{flex:1}
+.accent{height:3px;background:linear-gradient(90deg,#ec4899,#a78bfa,#22d3ee)}
+main{max-width:1100px;margin:0 auto;padding:16px}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+nav button{background:var(--card);color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600}
+nav button.on{background:#2a1233;color:var(--pink);border-color:var(--pink)}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px}.kpi b{display:block;font-size:22px}.kpi span{color:var(--muted);font-size:12px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);vertical-align:middle}
+th{color:var(--muted);font-size:12px;font-weight:600}tr:hover td{background:#121b31}
+.wrap{overflow-x:auto}
+input,select,textarea{background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:7px;padding:7px 9px;font:inherit;width:100%}
+label{display:block;color:var(--muted);font-size:12px;margin:8px 0 3px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.btn{background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;cursor:pointer;font-weight:600;white-space:nowrap}
+.btn.pink{background:#db2777;border-color:#db2777;color:#fff}.btn.green{background:#059669;border-color:#059669;color:#fff}
+.btn.rose{background:#be123c;border-color:#be123c;color:#fff}.btn.sm{padding:4px 9px;font-size:12px}
+.tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700}
+.ok{background:#06291f;color:var(--green)}.wait{background:#3a2a05;color:var(--amber)}.bad{background:#3f0d18;color:var(--rose)}
+.key{font-family:Consolas,monospace;color:var(--cyan);cursor:pointer}
+.muted{color:var(--muted)}.hide{display:none}#msg{margin-left:8px}
+#login{max-width:380px;margin:60px auto}
+@media (max-width:640px){main{padding:10px}th:nth-child(n+6),td:nth-child(n+6){display:none}}
+</style>
+</head>
+<body>
+<div class="accent"></div>
+<header><h1>💬 ChatterBot · Admin</h1><span class="sp"></span><span id="who" class="muted"></span>
+<button id="logout" class="btn sm hide">Hivoaka</button></header>
+
+<div id="login" class="card">
+  <h2 style="margin-top:0">Fidirana admin</h2>
+  <label>Email</label><input id="em" type="email" autocomplete="username">
+  <label>Teny miafina</label><input id="pw" type="password" autocomplete="current-password">
+  <div style="display:flex;gap:8px;margin-top:14px"><button class="btn pink" id="b_in">Hiditra</button>
+  <button class="btn" id="b_up">Hamorona kaonty admin</button></div>
+  <p class="muted" id="lmsg"></p>
+  <p class="muted" style="font-size:12px">Ny kaonty voalohany noforonina no lasa admin. Tsy misy olon-kafa afaka miditra aorian'izay.</p>
+</div>
+
+<main id="app" class="hide">
+  <nav><button data-t="week" class="on">📅 Herinandro</button><button data-t="clients">👥 Mpanjifa</button>
+  <button data-t="payments">💰 Fandoavana</button><button data-t="devices">💻 PC</button><button data-t="settings">⚙️ Vidiny sy paramètres</button><span id="msg" class="muted"></span></nav>
+
+  <section id="t_payments" class="hide">
+    <div class="card"><p class="muted" style="margin-top:0">SMS Mobile Money voaray avy amin'ny findainao. Ireo fantatra (clé ao amin'ny motif na laharan'ny mpanjifa) dia ampiharina ho azy; ny hafa: safidio ny mpanjifa dia « Ampiharina ».</p>
+      <div class="wrap"><table><thead><tr><th>Daty</th><th>Opérateur</th><th>Ar</th><th>$</th><th>Laharana</th><th>Mpanjifa</th><th>Vokatra</th><th></th></tr></thead><tbody id="paybody"></tbody></table></div></div>
+  </section>
+
+  <section id="t_week">
+    <div class="kpis" id="kpis"></div>
+    <div class="card"><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <b>Herinandro:</b><select id="wsel" style="width:auto"></select></div>
+      <div class="wrap"><table><thead><tr><th>Mpanjifa</th><th>Compte Telestars</th><th>⭐</th><th>$</th><th>Commission</th><th>Toetra</th><th>Ventes</th><th>PPV</th><th></th></tr></thead><tbody id="wbody"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="t_clients" class="hide">
+    <div class="card"><h3 style="margin-top:0">+ Mpanjifa vaovao</h3>
+      <div class="row">
+        <div><label>Anarana</label><input id="n_name" placeholder="ohatra: Jacquish"></div>
+        <div><label>Karazana</label><select id="n_kind"><option value="chatter">Chatter (% isan-kerinandro)</option><option value="agency">Agence (abonnement isam-bolana)</option></select></div>
+        <div><label>Tolotra agence</label><select id="n_plan"></select></div>
+        <div><label>Isan'ny PC (sièges)</label><input id="n_seats" type="number" min="1" value="1"></div>
+      </div>
+      <div style="margin-top:12px"><button class="btn pink" id="b_add">Hamorona sy hanome clé licence</button></div>
+    </div>
+    <div class="card"><div class="wrap"><table><thead><tr><th>Anarana</th><th>Karazana</th><th>Clé licence</th><th>PC</th><th>% / $ isam-bolana</th><th>Voaloa hatramin'ny</th><th>Toetra</th><th></th></tr></thead><tbody id="cbody"></tbody></table></div></div>
+  </section>
+
+  <section id="t_devices" class="hide">
+    <div class="card"><div class="wrap"><table><thead><tr><th>Mpanjifa</th><th>PC</th><th>Compte Telestars</th><th>Version</th><th>Hita farany</th><th></th></tr></thead><tbody id="dbody"></tbody></table></div></div>
+  </section>
+
+  <section id="t_settings" class="hide">
+    <div class="card"><h3 style="margin-top:0">Chatter</h3>
+      <div class="row">
+        <div><label>Commission (% amin'ny varotra isan-kerinandro)</label><input id="s_pct" type="number" step="0.1" min="0"></div>
+        <div><label>Fandoavana kely indrindra isan-kerinandro ($)</label><input id="s_min" type="number" step="0.01" min="0"></div>
+        <div><label>1 ⭐ = ? $</label><input id="s_rate" type="number" step="0.001" min="0"></div>
+        <div><label>Andro avela aorian'ny fe-potoana</label><input id="s_grace" type="number" min="0"></div>
+      </div>
+      <label>Fomba fandoavana (asehon'ny bot)</label><textarea id="s_pay" rows="2"></textarea>
+      <div class="row"><div><label>1 $ = ? Ariary</label><input id="s_mga" type="number" step="1" min="1"></div></div>
+    </div>
+    <div class="card"><h3 style="margin-top:0">📱 Findaina SMS (fandoavana ho azy)</h3>
+      <label>Mpandefa SMS ekena (opérateur, misaraka amin'ny « , »)</label><input id="s_senders">
+      <p class="muted" style="margin-bottom:4px">Ao amin'ny application « SMS forwarder » an'ny findainao (SMS avy amin'ireo mpandefa ireo ihany):</p>
+      <label>URL (POST)</label><input id="s_url" readonly onclick="this.select()">
+      <label>Headers</label><textarea id="s_headers" rows="3" readonly onclick="this.select()"></textarea>
+      <label>Body (JSON)</label><textarea id="s_body" rows="2" readonly onclick="this.select()"></textarea>
+      <p class="muted" style="font-size:12px">⚠️ Aza omena olona ny « p_secret »: izy no manamarina fa avy amin'ny findainao ny SMS.</p>
+    </div>
+    <div class="card"><h3 style="margin-top:0">Tolotra agence (abonnement isam-bolana)</h3>
+      <div class="wrap"><table><thead><tr><th>Anarana</th><th>PC (sièges)</th><th>$ isam-bolana</th><th></th></tr></thead><tbody id="pbody"></tbody></table></div>
+      <button class="btn sm" id="b_plan" style="margin-top:8px">+ Tolotra</button>
+    </div>
+    <button class="btn pink" id="b_save">💾 Tehirizina</button>
+    <p class="muted">Ny bot no maka ireo sanda ireo isaky ny mijery licence (tsy mila fanavaozana).</p>
+  </section>
+</main>
+
+<script>
+const SB_URL = "https://edeurowjtzcdnorormzd.supabase.co";
+const SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkZXVyb3dqdHpjZG5vcm9ybXpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzMjk4NzksImV4cCI6MjEwOTkwNTg3OX0.kgljZ9jifan16BTjA-X7bvl67prvZ8H2cn7oRGKlwxc";
+const sb = supabase.createClient(SB_URL, SB_ANON);
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = n => (Number(n) || 0).toFixed(2).replace(".", ",") + " $";
+const fmt = n => (Number(n) || 0).toLocaleString("fr-FR");
+let S = {}, CL = [], DV = [], WR = [], PY = [];
+const ar = n => fmt(Math.round(Number(n) || 0)) + " Ar";
+
+function msg(t, bad) { $("msg").textContent = t; $("msg").style.color = bad ? "var(--rose)" : "var(--green)"; setTimeout(() => $("msg").textContent = "", 4000); }
+function monday(d) { const x = new Date(d); const k = (x.getDay() + 6) % 7; x.setDate(x.getDate() - k); return x.toISOString().slice(0, 10); }
+
+async function login(up) {
+  const email = $("em").value.trim(), password = $("pw").value;
+  $("lmsg").textContent = "⏳...";
+  const r = up ? await sb.auth.signUp({ email, password }) : await sb.auth.signInWithPassword({ email, password });
+  if (r.error) { $("lmsg").textContent = "⚠️ " + r.error.message; return; }
+  if (up && !r.data.session) { $("lmsg").textContent = "📧 Jereo ny mailaka: tsindrio ny rohy fanamarinana, avy eo miverena eto ary « Hiditra »."; return; }
+  await enter();
+}
+async function enter() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return;
+  const { data: ok, error } = await sb.rpc("claim_admin");
+  if (error || !ok) { $("lmsg").textContent = "⛔ Tsy admin ity kaonty ity."; await sb.auth.signOut(); return; }
+  $("login").classList.add("hide"); $("app").classList.remove("hide"); $("logout").classList.remove("hide");
+  $("who").textContent = session.user.email;
+  await loadAll();
+}
+async function loadAll() {
+  const [s, c, d, w, p] = await Promise.all([
+    sb.from("settings").select("*").eq("id", 1).single(),
+    sb.from("clients").select("*").order("created_at"),
+    sb.from("devices").select("*").order("last_seen", { ascending: false }),
+    sb.from("weekly_reports").select("*").order("week_start", { ascending: false }).limit(2000),
+    sb.from("payments").select("*").order("received_at", { ascending: false }).limit(300)]);
+  if (s.error || c.error) { msg("⚠️ " + (s.error || c.error).message, true); return; }
+  S = s.data; CL = c.data; DV = d.data || []; WR = w.data || []; PY = p.data || [];
+  renderSettings(); renderClients(); renderDevices(); renderWeeks(); renderPayments();
+}
+const cname = id => (CL.find(c => c.id === id) || {}).name || "?";
+
+function renderWeeks() {
+  const weeks = [...new Set([monday(new Date()), ...WR.map(r => r.week_start)])].sort().reverse();
+  const cur = $("wsel").value || weeks[0];
+  $("wsel").innerHTML = weeks.map(w => `<option ${w === cur ? "selected" : ""}>${w}</option>`).join("");
+  const rows = WR.filter(r => r.week_start === $("wsel").value);
+  const tot = rows.reduce((a, r) => a + Number(r.commission_usd), 0), paid = rows.filter(r => r.paid).reduce((a, r) => a + Number(r.commission_usd), 0);
+  const due = WR.filter(r => !r.paid && r.week_start < monday(new Date())).reduce((a, r) => a + Number(r.commission_usd), 0);
+  const agMonth = CL.filter(c => c.kind === "agency" && !c.blocked).reduce((a, c) => a + Number(c.usd_month || 0), 0);
+  $("kpis").innerHTML = `<div class="kpi"><span>⭐ herinandro</span><b>${fmt(rows.reduce((a, r) => a + Number(r.stars), 0))}</b></div>
+    <div class="kpi"><span>Commission herinandro</span><b>${money(tot)}</b></div>
+    <div class="kpi"><span>Voaloa herinandro</span><b style="color:var(--green)">${money(paid)}</b></div>
+    <div class="kpi"><span>Mbola tsy voaloa (herinandro lasa)</span><b style="color:var(--rose)">${money(due)}</b></div>
+    <div class="kpi"><span>Abonnement agence / volana</span><b>${money(agMonth)}</b></div>`;
+  $("wbody").innerHTML = rows.map(r => `<tr><td>${esc(cname(r.client_id))}</td><td>${esc(r.telestars_account || "—")}</td>
+    <td>${fmt(r.stars)}</td><td>${money(r.usd)}</td><td><b>${money(r.commission_usd)}</b></td>
+    <td>${r.paid ? '<span class="tag ok">✅ Voaloa</span>' : (r.week_start < monday(new Date()) ? '<span class="tag bad">⏳ Tsy voaloa</span>' : '<span class="tag wait">Mbola mandeha</span>')}</td>
+    <td>${r.sales ?? "—"}</td><td>${r.ppv ?? "—"}</td>
+    <td>${r.paid ? `<button class="btn sm" onclick="pay(${r.id},false)">Averina</button>` : `<button class="btn sm green" onclick="pay(${r.id},true)">✅ Voaloa</button>`}</td></tr>`).join("")
+    || `<tr><td colspan="9" class="muted">Tsy mbola misy rapport amin'ity herinandro ity.</td></tr>`;
+}
+async function pay(id, v) {
+  const { error } = await sb.from("weekly_reports").update({ paid: v, paid_at: v ? new Date().toISOString() : null }).eq("id", id);
+  if (error) return msg("⚠️ " + error.message, true);
+  msg(v ? "✅ Voamarika fa voaloa" : "↺ Naverina ho tsy voaloa"); loadAll();
+}
+
+function renderClients() {
+  const plans = S.agency_plans || [];
+  $("n_plan").innerHTML = `<option value="">—</option>` + plans.map(p => `<option value="${esc(p.name)}">${esc(p.name)} · ${p.seats} PC · ${money(p.usd_month)}/volana</option>`).join("");
+  $("cbody").innerHTML = CL.map(c => {
+    const n = DV.filter(d => d.client_id === c.id).length;
+    const late = c.kind === "agency" && (!c.paid_until || c.paid_until < new Date().toISOString().slice(0, 10));
+    const st = c.blocked ? '<span class="tag bad">⛔ Voasakana</span>' : late ? '<span class="tag wait">⏳ Abonnement</span>' : '<span class="tag ok">✅ Mandeha</span>';
+    return `<tr><td><b>${esc(c.name)}</b>${c.note ? `<br><span class="muted">${esc(c.note)}</span>` : ""}
+      <br><input placeholder="📱 laharana (034..., 032...)" value="${esc(c.phones || "")}" style="margin-top:4px;font-size:12px" onchange="upd('${c.id}',{phones:this.value.trim()||null})">
+      ${Number(c.credit_usd) > 0 ? `<br><span class="tag ok">crédit ${money(c.credit_usd)}</span>` : ""}</td>
+      <td>${c.kind === "agency" ? "Agence" + (c.plan ? " · " + esc(c.plan) : "") : "Chatter"}</td>
+      <td><span class="key" title="Tsindrio hadika" onclick="navigator.clipboard.writeText('${esc(c.licence_key)}');msg('📋 Voadika: ${esc(c.licence_key)}')">${esc(c.licence_key)}</span></td>
+      <td>${n} / <input type="number" min="1" value="${c.seats}" style="width:60px" onchange="upd('${c.id}',{seats:+this.value})"></td>
+      <td>${c.kind === "agency"
+        ? `<input type="number" step="0.01" placeholder="tolotra" value="${c.usd_month ?? ""}" style="width:90px" onchange="upd('${c.id}',{usd_month:this.value===''?null:+this.value})"> $`
+        : `<input type="number" step="0.1" placeholder="${S.commission_pct}" value="${c.commission_pct ?? ""}" style="width:70px" onchange="upd('${c.id}',{commission_pct:this.value===''?null:+this.value})"> %`}</td>
+      <td>${c.kind === "agency" ? `<input type="date" value="${c.paid_until ?? ""}" onchange="upd('${c.id}',{paid_until:this.value||null})">
+        <button class="btn sm green" onclick="plusMonth('${c.id}')">+1 volana</button>` : "—"}</td>
+      <td>${st}</td>
+      <td>${c.blocked ? `<button class="btn sm green" onclick="upd('${c.id}',{blocked:false})">▶ Avela</button>` : `<button class="btn sm rose" onclick="upd('${c.id}',{blocked:true})">⛔ Sakanana</button>`}
+        <button class="btn sm" onclick="note('${c.id}')">📝</button></td></tr>`;
+  }).join("") || `<tr><td colspan="8" class="muted">Tsy mbola misy mpanjifa.</td></tr>`;
+}
+async function upd(id, patch) {
+  const { error } = await sb.from("clients").update(patch).eq("id", id);
+  if (error) return msg("⚠️ " + error.message, true);
+  msg("✅ Voatahiry"); loadAll();
+}
+function plusMonth(id) {
+  const c = CL.find(x => x.id === id), today = new Date().toISOString().slice(0, 10);
+  const base = new Date((c.paid_until && c.paid_until > today) ? c.paid_until : today);
+  base.setMonth(base.getMonth() + 1);
+  upd(id, { paid_until: base.toISOString().slice(0, 10) });
+}
+function note(id) { const c = CL.find(x => x.id === id); const t = prompt("Fanamarihana (finday, fomba fandoavana...)", c.note || ""); if (t !== null) upd(id, { note: t }); }
+async function addClient() {
+  const name = $("n_name").value.trim(); if (!name) return msg("⚠️ Soraty ny anarana", true);
+  const kind = $("n_kind").value, plan = $("n_plan").value || null;
+  const p = (S.agency_plans || []).find(x => x.name === plan);
+  const row = { name, kind, seats: Math.max(1, +$("n_seats").value || 1) };
+  if (kind === "agency" && p) { row.plan = p.name; row.seats = p.seats; row.usd_month = p.usd_month; }
+  const { data, error } = await sb.from("clients").insert(row).select().single();
+  if (error) return msg("⚠️ " + error.message, true);
+  $("n_name").value = ""; await loadAll();
+  prompt("✅ Clé licence ho an'i " + name + " (adikao dia omeo azy):", data.licence_key);
+}
+
+function renderPayments() {
+  const opts = `<option value="">— safidio —</option>` + CL.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  $("paybody").innerHTML = PY.map(p => `<tr><td>${new Date(p.received_at).toLocaleString("fr-FR")}</td><td>${esc(p.operator || "")}</td>
+    <td><b>${p.amount_mga == null ? "?" : ar(p.amount_mga)}</b></td><td>${p.amount_usd == null ? "?" : money(p.amount_usd)}</td>
+    <td>${esc(p.sender_phone || "")}</td>
+    <td>${p.applied ? esc(cname(p.client_id)) : `<select id="pc_${p.id}" style="width:auto">${opts.replace(`value="${p.client_id}"`, `value="${p.client_id}" selected`)}</select>`}</td>
+    <td>${p.applied ? `<span class="tag ok">✅ ${esc(p.result || "")}</span>` : `<span class="tag wait">${esc(p.result || "miandry")}</span>`}</td>
+    <td>${p.applied ? `<button class="btn sm" title="${esc(p.raw_text)}" onclick="alert(this.title)">SMS</button>`
+      : `<button class="btn sm green" onclick="applyPay(${p.id})">Ampiharina</button> <button class="btn sm" title="${esc(p.raw_text)}" onclick="alert(this.title)">SMS</button>`}</td></tr>`).join("")
+    || `<tr><td colspan="8" class="muted">Tsy mbola misy SMS fandoavana voaray.</td></tr>`;
+}
+async function applyPay(id) {
+  const cid = $("pc_" + id).value; if (!cid) return msg("⚠️ Safidio ny mpanjifa", true);
+  let r = await sb.from("payments").update({ client_id: cid, matched_by: "admin" }).eq("id", id);
+  if (r.error) return msg("⚠️ " + r.error.message, true);
+  const p = PY.find(x => x.id === id);
+  if (p && p.amount_usd == null) {
+    const v = prompt("Tsy hita ny vola tao amin'ny SMS. Ohatrinona (Ar)?"); if (!v) return;
+    r = await sb.from("payments").update({ amount_mga: +v, amount_usd: Math.round(+v / S.usd_to_mga * 100) / 100 }).eq("id", id);
+    if (r.error) return msg("⚠️ " + r.error.message, true);
+  }
+  const { data, error } = await sb.rpc("apply_payment", { p_id: id });
+  if (error) return msg("⚠️ " + error.message, true);
+  msg("✅ " + (data.result || "Voaray")); loadAll();
+}
+
+function renderDevices() {
+  $("dbody").innerHTML = DV.map(d => `<tr><td>${esc(cname(d.client_id))}</td><td class="muted">${esc(d.device_id)}</td>
+    <td>${esc(d.telestars_account || "—")}</td><td>${esc(d.app_version || "")}</td><td>${new Date(d.last_seen).toLocaleString("fr-FR")}</td>
+    <td><button class="btn sm rose" onclick="delDev(${d.id})" title="Manafaka siège">🗑</button></td></tr>`).join("")
+    || `<tr><td colspan="6" class="muted">Tsy mbola misy PC.</td></tr>`;
+}
+async function delDev(id) {
+  if (!confirm("Esorina ity PC ity? (afaka mampiasa ny siège ny PC hafa)")) return;
+  const { error } = await sb.from("devices").delete().eq("id", id);
+  if (error) return msg("⚠️ " + error.message, true); msg("✅ PC nesorina"); loadAll();
+}
+
+function renderSettings() {
+  $("s_pct").value = S.commission_pct; $("s_min").value = S.min_weekly_usd; $("s_rate").value = S.usd_per_star;
+  $("s_grace").value = S.grace_days; $("s_pay").value = S.payment_info;
+  $("s_mga").value = S.usd_to_mga; $("s_senders").value = S.sms_senders || "";
+  $("s_url").value = SB_URL + "/rest/v1/rpc/sms_payment";
+  $("s_headers").value = "apikey: " + SB_ANON + "\nContent-Type: application/json";
+  $("s_body").value = JSON.stringify({ p_secret: S.sms_secret, p_from: "%from%", p_text: "%text%" });
+  $("pbody").innerHTML = (S.agency_plans || []).map((p, i) => `<tr><td><input value="${esc(p.name)}" data-i="${i}" data-k="name"></td>
+    <td><input type="number" min="1" value="${p.seats}" data-i="${i}" data-k="seats"></td>
+    <td><input type="number" step="0.01" min="0" value="${p.usd_month}" data-i="${i}" data-k="usd_month"></td>
+    <td><button class="btn sm rose" onclick="S.agency_plans.splice(${i},1);renderSettings()">🗑</button></td></tr>`).join("");
+}
+async function saveSettings() {
+  const plans = (S.agency_plans || []).map((p, i) => {
+    const g = k => document.querySelector(`#pbody [data-i="${i}"][data-k="${k}"]`).value;
+    return { name: g("name").trim() || ("Agence " + (i + 1)), seats: Math.max(1, +g("seats") || 1), usd_month: +g("usd_month") || 0 };
+  });
+  const patch = { commission_pct: +$("s_pct").value || 0, min_weekly_usd: +$("s_min").value || 0, usd_per_star: +$("s_rate").value || 0.013,
+    grace_days: Math.max(0, +$("s_grace").value || 0), payment_info: $("s_pay").value.trim(), agency_plans: plans,
+    usd_to_mga: Math.max(1, +$("s_mga").value || 4500), sms_senders: $("s_senders").value.trim(), updated_at: new Date().toISOString() };
+  const { error } = await sb.from("settings").update(patch).eq("id", 1);
+  if (error) return msg("⚠️ " + error.message, true); msg("✅ Voatahiry: ampiharina amin'ny bot rehetra"); loadAll();
+}
+
+document.querySelectorAll("nav button[data-t]").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button[data-t]").forEach(x => x.classList.toggle("on", x === b));
+  ["week", "clients", "payments", "devices", "settings"].forEach(t => $("t_" + t).classList.toggle("hide", t !== b.dataset.t));
+});
+$("b_in").onclick = () => login(false); $("b_up").onclick = () => login(true);
+$("pw").addEventListener("keydown", e => { if (e.key === "Enter") login(false); });
+$("logout").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+$("b_add").onclick = addClient; $("b_save").onclick = saveSettings; $("wsel").onchange = renderWeeks;
+$("b_plan").onclick = () => { (S.agency_plans = S.agency_plans || []).push({ name: "Agence", seats: 5, usd_month: 30 }); renderSettings(); };
+enter();
+</script>
+</body>
+</html>
